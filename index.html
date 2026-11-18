@@ -579,6 +579,7 @@ kbd{font-family:var(--body);font-size:11px;border:1px solid var(--line);border-b
         <button class="gb small" id="gListen" type="button">Écouter le moteur</button>
         <button class="gb small" id="gSaveNow" type="button">Sauvegarder maintenant</button>
         <button class="gb small" id="gSave" type="button">Code de sauvegarde</button>
+        <button class="gb small" id="gNew" type="button" style="grid-column:span 2">Nouvelle partie</button>
         <button class="gb small" id="gAdmin" type="button" hidden style="grid-column:span 2;border-style:dashed">Admin · régler le solde</button>
       </div>
       <div class="gline" id="gSound"></div>
@@ -1582,11 +1583,11 @@ function dayKey(){var t=new Date();return t.getFullYear()+"-"+(t.getMonth()+1)+"
 function dayN(k){var D=st.day;return D&&D.d===dayKey()&&D.c[k]||0;}
 function dayUse(k){if(!st.day||st.day.d!==dayKey())st.day={d:dayKey(),c:{}};st.day.c[k]=(st.day.c[k]||0)+1;save();}
 function saveObj(){var o={belt:st.belt==null?100:st.belt,beltBroken:!!st.beltBroken,debt:st.debt||0,debtAcc:st.debtAcc||0,day:st.day||null,budget:st.budget,hp:st.hp,broken:st.broken,seized:st.seized,hs:st.hs||null,gbw:st.gbw||0,clw:st.clw||0,tune:st.tune,tail:st.tail,diag:st.diag||null,cart:st.cart||[],orders:st.orders||[],stock:st.stock||[],g15:st.g15||0,b21:st.b21||0,b26:st.b26||0,szLog:st.szLog||[],vown:VSTORE.owned,vact:VSTORE.active,inst:{}};for(var k in st.inst)o.inst[k]=st.inst[k].id;return o;}
-var LAST_SAVE=0;function save(){LAST_SAVE=Date.now();try{var o=saveObj();o.t=LAST_SAVE;localStorage.setItem("b50save4",JSON.stringify(o));}catch(e){}}
+var LAST_SAVE=0;function save(){if(window.__wipe)return;LAST_SAVE=Date.now();try{var o=saveObj();o.t=LAST_SAVE;localStorage.setItem("b50save4",JSON.stringify(o));}catch(e){}}
 /* garage multi-véhicules : le budget est commun, chaque véhicule garde ses pièces, ses réglages et son usure */
 var VSTORE={active:"moto",owned:{},states:{}};
 function loadV(oIn){try{var o=oIn||JSON.parse(localStorage.getItem("b50veh4")||"null");if(o&&o.owned){VSTORE=o;if(!VSTORE.states)VSTORE.states={};}}catch(e){}window.VEH=VSTORE.active||"moto";}
-function saveV(){try{localStorage.setItem("b50veh4",JSON.stringify(VSTORE));}catch(e){}}
+function saveV(){if(window.__wipe)return;try{localStorage.setItem("b50veh4",JSON.stringify(VSTORE));}catch(e){}}
 function snapV(){var o={belt:st.belt==null?100:st.belt,beltBroken:!!st.beltBroken,diag:st.diag||null,hp:st.hp,broken:st.broken,seized:st.seized,hs:st.hs||null,gbw:st.gbw||0,clw:st.clw||0,tune:JSON.parse(JSON.stringify(st.tune)),tail:JSON.parse(JSON.stringify(st.tail)),inst:{}};for(var k in st.inst)o.inst[k]=st.inst[k].id;return o;}
 function applyV(o){var byId={};P.forEach(function(p){byId[p.id]=p;});st.hp=o?o.hp:100;st.diag=o&&o.diag?o.diag:null;st.belt=o&&o.belt!=null?o.belt:100;st.beltBroken=!!(o&&o.beltBroken);st.broken=o?!!o.broken:false;st.seized=o?!!o.seized:false;st.hs=o&&o.hs?o.hs:null;st.gbw=o&&o.gbw?o.gbw:0;st.clw=o&&o.clw?o.clw:0;
   st.tune=o&&o.tune?o.tune:{idle:1.5,air:1.5,clip:3,adv:0,oil:2};st.tail=o&&o.tail?o.tail:{pw:0,fw:0};st.inst={};if(o)for(var k in o.inst){var q=byId[o.inst[k]];if(!q)continue;if(fitsVeh(q))st.inst[k]=q;else{if(!st.stock)st.stock=[];st.stock.push({id:q.id,veh:q.veh||"moto",used:1});}}fixInst();}
@@ -2901,7 +2902,7 @@ function hhmm(t){var d=new Date(t);return String(d.getHours()).padStart(2,"0")+"
 function saveStatus(){var e=$("gSaveSt");if(!e)return;var parts=[];if(SHOP.lastSave())parts.push("Partie enregistrée à "+hhmm(SHOP.lastSave()));
   parts.push(CLOUD.state==="ok"?(CLOUD.at?"copie en ligne à "+hhmm(CLOUD.at):"copie en ligne active"):CLOUD.state==="off"?"pas de copie en ligne ici, garde ton code de sauvegarde":"connexion à la sauvegarde en ligne…");
   e.textContent=parts.join(" · ")+" · sauvegarde auto toutes les 2 min";}
-function cloudPush(force){if(!CLOUD.doc)return Promise.resolve(false);var code=SHOP.exportCode();if(!force&&code===CLOUD.last)return Promise.resolve(true);
+function cloudPush(force){if(!CLOUD.doc||window.__wipe)return Promise.resolve(false);var code=SHOP.exportCode();if(!force&&code===CLOUD.last)return Promise.resolve(true);
   return CLOUD.doc.set({code:code,t:Date.now(),rid:RESET_ID}).then(function(){CLOUD.last=code;CLOUD.at=Date.now();CLOUD.state="ok";saveStatus();return true;},function(err){if(err&&err.code==="unavailable")return false;CLOUD.doc=null;CLOUD.state="off";saveStatus();return false;});}
 function saveNow(force){SHOP.save();saveStatus();return cloudPush(force);}
 (function(){if(!window.claude||!claude.use){CLOUD.state="off";saveStatus();cloudReady();return;}
@@ -2910,7 +2911,8 @@ function saveNow(force){SHOP.save();saveStatus();return cloudPush(force);}
       CLOUD.doc=db.doc("data/users/"+uid+"/save4");
       return CLOUD.doc.get().then(function(snap){var d=snap.exists?snap.data():null;CLOUD.state="ok";
         /* la copie en ligne est plus récente que celle du téléphone (ou le téléphone est vide) : on la reprend */
-        if(d&&d.code&&d.rid===RESET_ID&&(d.t||0)>SHOP.lastSave()+1000){if(SHOP.importCode(d.code)){CLOUD.last=d.code;CLOUD.at=d.t;if(SCREEN==="deal"&&SHOP.hasVeh())show("garage");if(SCREEN==="garage")garageInfo();$("gSound").textContent="Partie récupérée depuis ta sauvegarde en ligne.";}}
+        var fresh=0;try{fresh=+localStorage.getItem("b50fresh")||0;}catch(e){}
+        if(d&&d.code&&d.rid===RESET_ID&&(d.t||0)>SHOP.lastSave()+1000&&(d.t||0)>fresh){if(SHOP.importCode(d.code)){CLOUD.last=d.code;CLOUD.at=d.t;if(SCREEN==="deal"&&SHOP.hasVeh())show("garage");if(SCREEN==="garage")garageInfo();$("gSound").textContent="Partie récupérée depuis ta sauvegarde en ligne.";}}
         else cloudPush(!!(d&&d.rid!==RESET_ID));
         saveStatus();cloudReady();});});}).catch(function(){CLOUD.doc=null;CLOUD.state="off";saveStatus();cloudReady();});})();
 setInterval(function(){if(document.visibilityState&&document.visibilityState!=="visible")return;saveNow(false);},120000);
@@ -2931,6 +2933,11 @@ setInterval(function(){try{SHOP.save();}catch(e){}},5000);
     var bt=o.querySelectorAll(".cfmBtns .gb");bt[0].onclick=function(){o.remove();};
     bt[1].onclick=function(){var v=Math.max(0,Math.round(parseFloat(inp.value)||0));SHOP.st.budget=v;SHOP.earn(0);if(typeof saveNow==="function")saveNow(true);o.remove();garageInfo();$("gSound").textContent="Solde réglé à "+SHOP.eur(v)+".";};
     g.appendChild(o);inp.focus();});})();
+/* nouvelle partie : tout effacer (téléphone et copie en ligne) et repartir de zéro */
+$("gNew").addEventListener("click",function(){askConfirm("Recommencer à zéro ?","Tu perds tous tes véhicules, tes pièces, ton argent et tes records, sur ce téléphone et dans ta sauvegarde en ligne. Tu repars avec 100 € et un véhicule offert. Pour pouvoir revenir en arrière, copie d'abord ton code de sauvegarde.","Tout effacer",function(){
+  window.__wipe=true;try{["b50save4","b50veh4","b50wh4","b50best4"].forEach(function(k){localStorage.removeItem(k);});localStorage.setItem("b50fresh",String(Date.now()));}catch(e){}
+  var done=false,go=function(){if(done)return;done=true;location.reload();};
+  if(CLOUD.doc&&CLOUD.doc.delete){try{CLOUD.doc.delete().then(go,go);}catch(e){go();}setTimeout(go,3000);}else go();});});
 $("gSaveNow").addEventListener("click",function(){var b=this;b.disabled=true;saveNow(true).then(function(ok){b.disabled=false;$("gSound").textContent=ok?"Partie sauvegardée sur ce téléphone et en ligne.":"Partie sauvegardée sur ce téléphone.";});});
 saveStatus();
 /* ---------- sauvegarde : un code à garder de côté pour ne jamais perdre sa partie ---------- */
@@ -3375,6 +3382,7 @@ resize();show(SHOP.hasVeh()?"garage":"deal");requestAnimationFrame(loop);
 })();
 
 </script>
+
 
 <div id="a2hs" hidden style="position:fixed;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;max-width:min(92vw,460px);background:#1d2227;color:#e9ecee;border:1px solid #f2b630;border-radius:10px;padding:10px 38px 10px 12px;font:14px/1.4 system-ui,-apple-system,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.5)">
 <b style="color:#f2b630">Garde ta partie !</b> Ajoute le jeu à ton écran d'accueil : touche <b>Partager</b> puis <b>« Sur l'écran d'accueil »</b>. Il s'ouvrira en plein écran, même sans réseau.
